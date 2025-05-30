@@ -10,7 +10,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class RoomLeaveRequest {
-    @NotNull
+public class GameStartRequest {
+    @NotNull(message = "방 ID는 필수입니다.")
     private Long roomId;
 }

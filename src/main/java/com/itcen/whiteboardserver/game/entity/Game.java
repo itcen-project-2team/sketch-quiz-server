@@ -26,4 +26,13 @@ public class Game {
     public enum GameStatus {
         NOT_STARTED, IN_PROGRESS, ENDED
     }
+
+    public void changeStatus(GameStatus status) {
+        this.status = status;
+    }
+
+    public void changeCurrentTurnId(Turn currentTurnId) {
+        this.currentTurnId = currentTurnId;
+    }
+
 }

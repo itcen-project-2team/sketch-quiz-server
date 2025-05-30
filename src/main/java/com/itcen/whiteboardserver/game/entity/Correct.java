@@ -31,5 +31,5 @@ public class Correct {
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt; // 생성 시간
+    private LocalDateTime createdAt; // 생성 시간 (정답 시간)
 }

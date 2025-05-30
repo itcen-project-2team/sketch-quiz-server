@@ -33,4 +33,8 @@ public class GameParticipation {
     private Member member; // 사용자
 
     private Integer score; // 점수
+
+    public void addScore(Integer score) {
+        this.score += score;
+    }
 }
