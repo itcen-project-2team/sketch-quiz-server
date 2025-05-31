@@ -21,7 +21,7 @@ public class Room {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id; // 방 ID
 
-    @Column
+    @Column(length = 30)
     private String title; // 방 제목
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -53,4 +53,10 @@ public class Room {
     public void updateStatus(RoomStatus newStatus) {
         this.status = newStatus;
     }
+
+    // 현재 게임 변경 메서드
+    public void updateCurrentGame(Game game) {
+        this.currentGame = game;
+    }
+
 }

@@ -50,9 +50,9 @@ public class WebSocketExceptionHandler {
             log.warn("Principal이 없는 상태에서 RuntimeException 발생: {}", ex.getMessage());
             return;
         }
-        
+
         String errorMessage = ex.getMessage();
-        log.debug("RuntimeException 발생: {}, 사용자: {}", errorMessage, principal.getName());
+        log.error("RuntimeException 발생: {}, 사용자: {}", errorMessage, principal.getName(), ex);
         
         messagingTemplate.convertAndSendToUser(
                 principal.getName(),

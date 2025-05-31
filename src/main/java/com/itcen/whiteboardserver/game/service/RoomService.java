@@ -1,8 +1,8 @@
 package com.itcen.whiteboardserver.game.service;
 
+import com.itcen.whiteboardserver.game.constant.GameConstants;
 import com.itcen.whiteboardserver.game.dto.request.RoomInfoRequest;
 import com.itcen.whiteboardserver.game.dto.request.RoomJoinRequest;
-import com.itcen.whiteboardserver.game.dto.request.RoomRequest;
 import com.itcen.whiteboardserver.game.dto.response.ParticipantResponse;
 import com.itcen.whiteboardserver.game.dto.response.RoomInfoResponse;
 import com.itcen.whiteboardserver.game.dto.response.RoomResponse;
@@ -41,9 +41,9 @@ public class RoomService {
      * 방 생성
      */
     @Transactional
-    public RoomResponse createRoom(RoomRequest request) {
-        log.info("방 생성 요청: memberId={}", request.getMemberId());
-        Member host = memberRepository.findById(request.getMemberId())
+    public RoomResponse createRoom(String memberEmail) {
+        log.info("방 생성 요청: memberEmail={}", memberEmail);
+        Member host = memberRepository.findByEmail(memberEmail)
                 .orElseThrow(() -> new MemberNotFoundException("사용자를 찾을 수 없습니다."));
 
         // 방 생성
@@ -100,7 +100,7 @@ public class RoomService {
      * 방 참여
      */
     @Transactional
-    public void joinRoom(RoomJoinRequest request, Long memberId) {
+    public void joinRoom(RoomJoinRequest request, String memberEmail) {
         log.info("방 참여 요청: roomCode={}", request.getRoomCode());
         // 방
         Long roomCode = request.getRoomCode();
@@ -112,7 +112,7 @@ public class RoomService {
         }
 
         // 사용자
-        Member member = memberRepository.findById(memberId)
+        Member member = memberRepository.findByEmail(memberEmail)
                 .orElseThrow(() -> new MemberNotFoundException("사용자를 찾을 수 없습니다."));
 
         // 이미 참여 중인지 확인
@@ -121,6 +121,14 @@ public class RoomService {
                 .isPresent();
         if (alreadyJoined) {
             throw new RoomJoinException("이미 참여중인 방입니다.");
+        }
+
+        // 참가자 수 확인 - 최대 인원 체크
+        List<RoomParticipation> currentParticipants = participationRepository.findByRoomId(roomCode);
+        if (currentParticipants.size() >= GameConstants.MAX_PARTICIPANTS) {
+            log.error("방 참여 실패: 최대 참가자 수 초과 (roomId={}, 현재 참가자 수={})",
+                    roomCode, currentParticipants.size());
+            throw new RoomJoinException("방에 더 이상 참여할 수 없습니다. 최대 인원은 " + GameConstants.MAX_PARTICIPANTS + "명입니다.");
         }
 
         // 참가자로 등록
@@ -137,8 +145,13 @@ public class RoomService {
      * 방 떠나기
      */
     @Transactional
-    public void leaveRoom(Long memberId) {
-        log.info("방 나가기 요청: memberId={}", memberId);
+    public void leaveRoom(String memberEmail) {
+        log.info("방 나가기 요청: memberEmail={}", memberEmail);
+
+        // 사용자
+        Member member = memberRepository.findByEmail(memberEmail)
+                .orElseThrow(() -> new MemberNotFoundException("사용자를 찾을 수 없습니다."));
+        Long memberId = member.getId();
 
         // 룸
         List<RoomParticipation> participationList = participationRepository.findByMemberId(memberId);

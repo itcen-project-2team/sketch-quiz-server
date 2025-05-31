@@ -35,15 +35,15 @@ public class WebSocketEventListener {
         SimpMessageHeaderAccessor headerAccessor = SimpMessageHeaderAccessor.wrap(event.getMessage());
         log.info("WebSocket 연결 해제 이벤트 발생: 세션 ID = {}", headerAccessor.getSessionId());
 
-        // 세션에서 사용자 ID를 가져옵니다
-        Long memberId = Long.valueOf(headerAccessor.getUser().getName());
+        // 세션에서 사용자 Email을 가져옵니다
+        String memberEmail = headerAccessor.getUser().getName();
 
-        log.info("연결 해제된 사용자 정보: memberId = {}", memberId);
+        log.info("연결 해제된 사용자 정보: memberEmail = {}", memberEmail);
 
-        log.info("사용자({})가 방에서 나가는 처리 시작", memberId);
+        log.info("사용자({})가 방에서 나가는 처리 시작", memberEmail);
         // 사용자가 방에서 나가는 처리
-        roomService.leaveRoom(memberId);
-        log.info("사용자({})가 방에서 나가는 처리 완료", memberId);
+        roomService.leaveRoom(memberEmail);
+        log.info("사용자({})가 방에서 나가는 처리 완료", memberEmail);
     }
 
     /**

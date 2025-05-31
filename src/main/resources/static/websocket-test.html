@@ -5,132 +5,218 @@
     <title>WebSocket 테스트</title>
     <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     <style>
         #log { height: 300px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; }
         .received { color: blue; }
         .sent { color: green; }
         .error { color: red; }
+        .auth-section { margin-bottom: 20px; padding: 10px; border: 1px solid #ddd; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
-    <h2>WebSocket 테스트</h2>
+<h2>WebSocket 테스트</h2>
 
-    <div>
-        <h3>연결 설정</h3>
-        <label for="serverUrl">서버 URL:</label>
-        <input type="text" id="serverUrl" value="http://localhost:8080/ws" style="width: 300px;"><br>
+<div class="auth-section" id="loginSection">
+    <h3>로그인</h3>
+    <p id="loginStatus">로그인되어 있지 않습니다.</p>
 
-        <label for="token">JWT 토큰:</label>
-        <input type="text" id="token" style="width: 500px;"><br>
-
-        <button id="connect">연결</button>
-        <button id="disconnect" disabled>연결 해제</button>
+    <!-- 로그인 버튼 -->
+    <div id="loginButtons">
+        <button id="googleLogin">
+            <img src="/images/web_light_rd_ctn@1x.png" alt="Google 로그인">
+        </button>
+        <br>
+        <button id="kakaoLogin">
+            <img src="/images/kakao_login_medium_narrow.png" alt="Kakao 로그인">
+        </button>
     </div>
 
-    <div>
-        <h3>방 생성/참여</h3>
-        <label for="roomCode">방 코드:</label>
-        <input type="text" id="roomCode">
-        <button id="createRoom">방 생성</button>
-        <button id="joinRoom" disabled>방 참여</button>
-        <button id="leaveRoom" disabled>방 나가기</button>
-        <button id="getRoomInfo" disabled>방 정보 조회</button>
+    <!-- 로그인 정보 -->
+    <div id="userInfo" class="hidden">
+        <p id="userName"></p>
+        <p id="userEmail"></p>
+        <button id="logout">로그아웃</button>
     </div>
+</div>
 
-    <div>
-        <h3>로그</h3>
-        <div id="log"></div>
-    </div>
+<div>
+    <h3>연결 설정</h3>
+    <label for="serverUrl">서버 URL:</label>
+    <input type="text" id="serverUrl" value="http://localhost:8080/ws" style="width: 300px;"><br>
+    <button id="connect" disabled>연결</button>
+    <button id="disconnect" disabled>연결 해제</button>
+</div>
 
-    <script>
-        let stompClient = null;
-        let roomSubscription = null;
-        let errorSubscription = null;
+<div>
+    <h3>방 생성/참여</h3>
+    <label for="roomCode">방 코드:</label>
+    <input type="text" id="roomCode">
+    <button id="createRoom" disabled>방 생성</button>
+    <button id="joinRoom" disabled>방 참여</button>
+    <button id="leaveRoom" disabled>방 나가기</button>
+</div>
 
-        function addLogEntry(message, type) {
-            const logDiv = document.getElementById('log');
-            const entry = document.createElement('div');
-            entry.className = type;
-            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-            logDiv.appendChild(entry);
-            logDiv.scrollTop = logDiv.scrollHeight;
-        }
+<div>
+    <h3>게임 기능</h3>
+    <button id="startGame" disabled>게임 시작</button>
+</div>
 
-        document.getElementById('connect').addEventListener('click', function() {
-            const serverUrl = document.getElementById('serverUrl').value;
-            const token = document.getElementById('token').value;
+<div>
+    <h3>로그</h3>
+    <div id="log"></div>
+</div>
 
-            const socket = new SockJS(serverUrl);
-            stompClient = Stomp.over(socket);
+<script>
+    let stompClient = null;
+    let roomSubscription = null;
+    let errorSubscription = null;
+    let currentUser = null;
 
-            addLogEntry('Stomp.over(socket)');
+    // 로그 추가 함수
+    function addLogEntry(message, type) {
+        const logDiv = document.getElementById('log');
+        const entry = document.createElement('div');
+        entry.className = type;
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logDiv.appendChild(entry);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
 
-            // 디버그 로그 활성화
-            stompClient.debug = function(str) {
-                addLogEntry(str, '');
-            };
-
-            const headers = {};
-            if (token) {
-                headers['Authorization'] = 'Bearer ' + token;
-            }
-
-            addLogEntry('웹소켓 연결 시도 중...', '');
-
-            stompClient.connect(headers, function(frame) {
-                addLogEntry('연결 성공: ' + frame, 'received');
-
-                // 에러 메시지 구독
-                errorSubscription = stompClient.subscribe('/user/queue/errors', function(message) {
-                    addLogEntry('에러 수신: ' + message.body, 'error');
-                });
-
-                document.getElementById('connect').disabled = true;
-                document.getElementById('disconnect').disabled = false;
-                document.getElementById('joinRoom').disabled = false;
-                document.getElementById('getRoomInfo').disabled = false;
-                document.getElementById('leaveRoom').disabled = false;
-
-            }, function(error) {
-                // 연결 실패 처리
-                addLogEntry('연결 실패: ' + error, 'error');
-                // 버튼 상태 초기화
-                document.getElementById('connect').disabled = false;
-                document.getElementById('disconnect').disabled = true;
-                document.getElementById('joinRoom').disabled = true;
-                document.getElementById('getRoomInfo').disabled = true;
-                document.getElementById('leaveRoom').disabled = true;
-
+    // 로그인 상태 확인
+    async function checkLoginStatus() {
+        try {
+            const res = await axios.get('/api/auth/me', {
+                withCredentials: true
             });
-        });
+            currentUser = res.data;
+            document.getElementById('loginStatus').textContent = `로그인됨: ${currentUser.name}`;
+            document.getElementById('userName').textContent = `이름: ${currentUser.name}`;
+            document.getElementById('userEmail').textContent = `이메일: ${currentUser.email}`;
 
-        document.getElementById('disconnect').addEventListener('click', function() {
+            document.getElementById('loginButtons').classList.add('hidden');
+            document.getElementById('userInfo').classList.remove('hidden');
+            document.getElementById('connect').disabled = false;
+
+            addLogEntry('로그인 상태 확인됨: ' + JSON.stringify(currentUser), 'received');
+            return true;
+        } catch (e) {
+            document.getElementById('loginStatus').textContent = '로그인되어 있지 않습니다.';
+            document.getElementById('loginButtons').classList.remove('hidden');
+            document.getElementById('userInfo').classList.add('hidden');
+            document.getElementById('connect').disabled = true;
+
+            // 만약 redirect 시 ?error 가 붙어왔다면
+            if (window.location.search.includes('error')) {
+                addLogEntry('OAuth2 인증에 실패했습니다.', 'error');
+            }
+            return false;
+        }
+    }
+
+    // 로그인 이벤트 핸들러
+    document.getElementById('googleLogin').addEventListener('click', function() {
+        window.location.href = '/oauth2/authorization/google';
+    });
+
+    document.getElementById('kakaoLogin').addEventListener('click', function() {
+        window.location.href = '/oauth2/authorization/kakao';
+    });
+
+    // 로그아웃 이벤트 핸들러
+    document.getElementById('logout').addEventListener('click', async function() {
+        try {
+            await axios.post('/api/auth/logout', {}, {
+                withCredentials: true
+            });
+            currentUser = null;
+            addLogEntry('로그아웃 성공', 'received');
+            checkLoginStatus();
+
+            // 웹소켓 연결 해제
             if (stompClient !== null) {
                 stompClient.disconnect();
                 addLogEntry('연결 해제됨', '');
-
-                document.getElementById('connect').disabled = false;
-                document.getElementById('disconnect').disabled = true;
-                document.getElementById('joinRoom').disabled = true;
-                document.getElementById('getRoomInfo').disabled = true;
-                document.getElementById('leaveRoom').disabled = true;
             }
+
+            // 버튼 상태 초기화
+            updateButtonStatus(false);
+        } catch (e) {
+            addLogEntry('로그아웃 실패: ' + e, 'error');
+        }
+    });
+
+    // 버튼 상태 업데이트 함수
+    function updateButtonStatus(isConnected) {
+        document.getElementById('connect').disabled = isConnected;
+        document.getElementById('disconnect').disabled = !isConnected;
+        document.getElementById('createRoom').disabled = !isConnected;
+        document.getElementById('joinRoom').disabled = !isConnected;
+        document.getElementById('leaveRoom').disabled = !isConnected;
+        document.getElementById('startGame').disabled = !isConnected;
+    }
+
+    // WebSocket 연결 이벤트 핸들러
+    document.getElementById('connect').addEventListener('click', function() {
+        const serverUrl = document.getElementById('serverUrl').value;
+
+        const socket = new SockJS(serverUrl);
+        stompClient = Stomp.over(socket);
+
+        addLogEntry('Stomp.over(socket)', '');
+
+        // 디버그 로그 활성화
+        stompClient.debug = function(str) {
+            addLogEntry(str, '');
+        };
+
+        addLogEntry('웹소켓 연결 시도 중...', '');
+
+        // 쿠키 기반 인증으로 헤더 수정 필요 없음 (withCredentials 자동 설정)
+        stompClient.connect({}, function(frame) {
+            addLogEntry('연결 성공: ' + frame, 'received');
+
+            // 에러 메시지 구독
+            errorSubscription = stompClient.subscribe('/user/queue/errors', function(message) {
+                addLogEntry('에러 수신: ' + message.body, 'error');
+            });
+
+            updateButtonStatus(true);
+
+        }, function(error) {
+            // 연결 실패 처리
+            addLogEntry('연결 실패: ' + error, 'error');
+            // 버튼 상태 초기화
+            updateButtonStatus(false);
         });
+    });
 
-        document.getElementById('createRoom').addEventListener('click', function() {
-            const memberId = prompt('사용자 ID를 입력하세요:', '1');
-            if (!memberId) return;
+    document.getElementById('disconnect').addEventListener('click', function() {
+        if (stompClient !== null) {
+            stompClient.disconnect();
+            addLogEntry('연결 해제됨', '');
+            updateButtonStatus(false);
+        }
+    });
 
-            fetch('/api/room', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + document.getElementById('token').value
-                },
-                body: JSON.stringify({
-                    memberId: memberId
-                })
+    document.getElementById('createRoom').addEventListener('click', function() {
+        if (!currentUser) {
+            addLogEntry('로그인이 필요합니다', 'error');
+            return;
+        }
+
+        fetch('/api/room', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            // credentials: include는 쿠키를 전송하기 위한 설정
+            credentials: 'include',
+            body: JSON.stringify({
+                memberId: currentUser.id || '1'
             })
+        })
             .then(response => response.json())
             .then(data => {
                 document.getElementById('roomCode').value = data.roomCode;
@@ -155,68 +241,77 @@
             .catch(error => {
                 addLogEntry('방 생성 실패: ' + error, 'error');
             });
+    });
+
+    document.getElementById('joinRoom').addEventListener('click', function() {
+        if (stompClient === null) return;
+
+        const roomCode = document.getElementById('roomCode').value;
+        if (!roomCode) {
+            addLogEntry('방 코드를 입력하세요', 'error');
+            return;
+        }
+
+        // 기존 방 구독 해제
+        if (roomSubscription) {
+            roomSubscription.unsubscribe();
+        }
+
+        // 새 방 구독
+        roomSubscription = stompClient.subscribe('/topic/room/' + roomCode, function(message) {
+            addLogEntry('방 정보 수신: ' + message.body, 'received');
         });
 
-        document.getElementById('joinRoom').addEventListener('click', function() {
-            if (stompClient === null) return;
+        // 방 참여 요청
+        stompClient.send('/app/room/join', {}, JSON.stringify({
+            roomCode: parseInt(roomCode)
+        }));
 
-            const roomCode = document.getElementById('roomCode').value;
-            if (!roomCode) {
-                addLogEntry('방 코드를 입력하세요', 'error');
-                return;
-            }
+        addLogEntry('방 참여 요청 전송: roomCode=' + roomCode, 'sent');
+    });
 
-            // 기존 방 구독 해제
-            if (roomSubscription) {
-                roomSubscription.unsubscribe();
-            }
+    document.getElementById('leaveRoom').addEventListener('click', function() {
+        if (stompClient === null) return;
 
-            // 새 방 구독
-            roomSubscription = stompClient.subscribe('/topic/room/' + roomCode, function(message) {
-                addLogEntry('방 정보 수신: ' + message.body, 'received');
-            });
+        // 방 나가기 요청 - roomId 없이 빈 객체 전송
+        stompClient.send('/app/room/leave', {}, JSON.stringify({}));
 
-            // 방 참여 요청
-            stompClient.send('/app/room/join', {}, JSON.stringify({
-                roomCode: parseInt(roomCode)
-            }));
+        addLogEntry('방 나가기 요청 전송', 'sent');
 
-            addLogEntry('방 참여 요청 전송: roomCode=' + roomCode, 'sent');
-        });
+        // 방 구독 해제
+        if (roomSubscription) {
+            roomSubscription.unsubscribe();
+            roomSubscription = null;
+        }
+    });
 
-        document.getElementById('leaveRoom').addEventListener('click', function() {
-            if (stompClient === null) return;
+    // 게임 시작 이벤트 핸들러
+    document.getElementById('startGame').addEventListener('click', function() {
+        if (stompClient === null) return;
 
-            const roomCode = document.getElementById('roomCode').value;
-            
-            // 방 나가기 요청 - roomId 없이 빈 객체 전송
-            stompClient.send('/app/room/leave', {}, JSON.stringify({}));
+        const roomCode = document.getElementById('roomCode').value;
+        if (!roomCode) {
+            addLogEntry('방 코드를 입력하세요', 'error');
+            return;
+        }
 
-            addLogEntry('방 나가기 요청 전송', 'sent');
+        // 게임 시작 요청
+        stompClient.send('/app/game/start', {}, JSON.stringify({
+            roomCode: parseInt(roomCode)
+        }));
 
-            // 방 구독 해제
-            if (roomSubscription) {
-                roomSubscription.unsubscribe();
-                roomSubscription = null;
-            }
-        });
+        addLogEntry('게임 시작 요청 전송: roomCode=' + roomCode, 'sent');
+    });
 
-        document.getElementById('getRoomInfo').addEventListener('click', function() {
-            if (stompClient === null) return;
+    // 페이지 로드 시 로그인 상태 확인
+    document.addEventListener('DOMContentLoaded', function() {
+        checkLoginStatus();
 
-            const roomCode = document.getElementById('roomCode').value;
-            if (!roomCode) {
-                addLogEntry('방 코드를 입력하세요', 'error');
-                return;
-            }
-
-            // 방 정보 요청
-            stompClient.send('/app/room/info', {}, JSON.stringify({
-                roomCode: parseInt(roomCode)
-            }));
-
-            addLogEntry('방 정보 요청 전송: roomCode=' + roomCode, 'sent');
-        });
-    </script>
+        // URL에서 에러 파라미터 확인
+        if (window.location.search.includes('error')) {
+            addLogEntry('OAuth2 인증에 실패했습니다.', 'error');
+        }
+    });
+</script>
 </body>
 </html>
