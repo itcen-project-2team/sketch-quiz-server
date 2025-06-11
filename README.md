@@ -80,6 +80,8 @@ REFRESH_TOKEN_EXPIRES_IN=2592000
 # 서버 포트
 DEV_SERVER_PORT=8080
 PROD_SERVER_PORT=
+# 프론트 리다이렉트 경로
+FRONTEND_REDIRECT_URL=http://localhost:3000/main
 ```
 
 ## API 문서
