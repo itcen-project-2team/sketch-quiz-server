@@ -19,7 +19,8 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOrigins(allowedOrigins.split(","))
+//                .allowedOrigins("http"+allowedOrigins.split(","), "https"+allowedOrigins)
+                .allowedOrigins("http"+allowedOrigins, "https"+allowedOrigins)
                 .allowedMethods("*")
                 .allowedHeaders("*")
                 .allowCredentials(true);
@@ -35,9 +36,11 @@ public class CorsConfig implements WebMvcConfigurer {
         CorsConfiguration config = new CorsConfiguration();
 
         // 허용할 Origin을 쉼표(,) 기준으로 분리해서 등록
-        for (String origin : allowedOrigins.split(",")) {
-            config.addAllowedOrigin(origin.trim());
-        }
+//        for (String origin : allowedOrigins.split(",")) {
+//            config.addAllowedOrigin(origin.trim());
+//        }
+        config.addAllowedOrigin("http"+allowedOrigins);
+        config.addAllowedOrigin("https"+allowedOrigins);
 
         // 허용할 HTTP 메서드
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));

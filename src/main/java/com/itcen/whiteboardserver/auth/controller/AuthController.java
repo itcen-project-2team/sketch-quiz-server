@@ -51,19 +51,4 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE, cookies[1].toString())
                 .build();
     }
-
-    @GetMapping("/me")
-    public Map<String,Object> me(@AuthenticationPrincipal CustomPrincipal principal) {
-
-        return Map.of(
-                "email", principal.getEmail(),
-                "nickname", principal.getNickname(),
-                "id", principal.getId()
-        );
-    }
-
-    @GetMapping("/protected")
-    public String secret() {
-        return "비밀 데이터";
-    }
 }

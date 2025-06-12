@@ -56,7 +56,13 @@ public class MemberServiceImpl implements MemberService {
          *  2. 가져온 닉네임을 사용자의 닉네임으로 설정한다.
          *  3. 사용한 닉네임은 is_used를 true로 변경한다.
         * */
+
         NicknameDTO randomNickname = nicknamesRepository.findRandomNickname();
+
+        if(randomNickname == null) {
+            throw new GlobalCommonException(GlobalErrorCode.NICKNAME_NOT_FOUND);
+        }
+
 
         nicknamesRepository.updateIsUsed(randomNickname.getId(), true);
 
@@ -70,12 +76,15 @@ public class MemberServiceImpl implements MemberService {
     @Transactional
     public MemberResponseDTO patchNickname(CustomPrincipal principal, NicknameDTO nicknameDTO) {
 
+        if (principal == null) {
+            throw new GlobalCommonException(GlobalErrorCode.MEMBER_NOT_FOUND);
+        }
+
         /* 설명. 닉네임 repo에서 닉네임 가져오기
          *  2. 가져온 닉네임을 사용자의 닉네임으로 설정한다.
          *  3. 사용한 닉네임은 is_used를 true로 변경한다.
          *  4. 기존 닉네임은 is_used를 false로 변경한다.
         * */
-
         MemberResponseDTO memberDTO = null;
 
         if (nicknameDTO != null) {

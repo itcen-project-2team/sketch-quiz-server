@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itcen.whiteboardserver.auth.service.CustomOAuth2UserService;
 import com.itcen.whiteboardserver.auth.service.CustomOidcUserService;
 import com.itcen.whiteboardserver.auth.service.UserDetailsServiceImpl;
+import com.itcen.whiteboardserver.config.mvc.SpaCsrfTokenRequestHandler;
 import com.itcen.whiteboardserver.global.exception.GlobalErrorCode;
 import com.itcen.whiteboardserver.global.exception.GlobalExceptionResponse;
 import com.itcen.whiteboardserver.security.filter.JwtAuthenticationFilter;
@@ -31,9 +32,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.access.AccessDeniedHandlerImpl;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.web.cors.CorsConfigurationSource;
 
@@ -74,54 +75,68 @@ public class SecurityConfig {
                         SecurityContextHolderFilter.class)
                 // Rate limiting filter 를 먼저 chaining 하는 것은 비인증 사용자만 하면 된다
                 .addFilterAfter(redisRateLimitingFilter, RequestResponseLoggingFilter.class)
-                .csrf(AbstractHttpConfigurer::disable)
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler())
+                        // 랜딩 시 api/member 호출하기 때문에 cookie를 내려줌.
+                )
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
 //                // JWT auth filter -> 인증 필터보다 먼저 토큰 추출 및 검증을 하여 SecurityContext 설정
-                .addFilterAfter(jwtAuthenticationFilter, SecurityContextHolderFilter.class)
-
+//                .addFilterAfter(jwtAuthenticationFilter, SecurityContextHolderFilter.class)
+                .addFilterAfter(jwtAuthenticationFilter, CsrfFilter.class)
                 // OAuth2 Login
                 .oauth2Login(oauth2 -> oauth2
-//                        .loginPage("/auth/login")
-                        .authorizationEndpoint(a -> a
-                                .baseUri("/oauth2/authorization")
-                                // 쿠키 저장소: OAuth2 인가 요청(state) 보관
-                                .authorizationRequestRepository(authorizationRequestRepository()
-                            )
-                        )
-                        .redirectionEndpoint(r ->
-                                r.baseUri("/login/oauth2/code/*"))
-                        .userInfoEndpoint(u ->
-                                u.userService(customOAuth2UserService)
-                        // OIDC (openid) 용
-                                .oidcUserService(customOidcUserService)
-                        )
-                        .successHandler(oAuth2LoginSuccessHandler)
+                                .authorizationEndpoint(a -> a
+                                        .baseUri("/oauth2/authorization")
+                                        // 쿠키 저장소: OAuth2 인가 요청(state) 보관
+                                        .authorizationRequestRepository(authorizationRequestRepository()
+                                        )
+                                )
+                                .redirectionEndpoint(r ->
+                                        r.baseUri("/login/oauth2/code/*"))
+                                .userInfoEndpoint(u ->
+                                        u.userService(customOAuth2UserService)
+                                                // OIDC (openid) 용
+                                                .oidcUserService(customOidcUserService)
+                                )
+                                .successHandler(oAuth2LoginSuccessHandler)
 
-                        .failureHandler((request, response, exception) -> {
-                            // 1) 예외 로그 찍기
-                            log.error("OAuth2 로그인 실패: registrationId={}, uri={}",
-                                    request.getParameter("registrationId"),
-                                    request.getRequestURI(),
-                                    exception
-                            );
+                                .failureHandler((request, response, exception) -> {
+                                    // 1) 예외 로그 찍기
+                                    log.error("OAuth2 로그인 실패: registrationId={}, uri={}",
+                                            request.getParameter("registrationId"),
+                                            request.getRequestURI(),
+                                            exception
+                                    );
 
-                            sendErrorResponse(response, GlobalErrorCode.OAUTH_UNAUTHORIZED);
-                        })
+                                    sendErrorResponse(response, GlobalErrorCode.OAUTH_UNAUTHORIZED);
+                                })
                 )
                 // Disable HTTP session
                 .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // Authorize endpoints
                 .authorizeHttpRequests(auth -> auth
-                        .anyRequest().permitAll()
+                        .requestMatchers(
+                                "/api/auth/logout",
+                                "/api/auth/oauth2/refresh",
+                                "/login/oauth2/code/kakao",      // 카카오 OAuth2 콜백 (경로는 실제 리다이렉트 URI에 따라 다를 수 있음)
+                                "/oauth2/authorization/kakao"    // 카카오 OAuth2 로그인 시작 (프론트에서 이 경로로 요청)
+                        ).permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+
+                        .anyRequest().authenticated()
                 )
+
 
                 /* 설명. 보호된 api 접근 시*/
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(new CustomAuthenticationEntryPoint(GlobalErrorCode.ACCESS_TOKEN_EXPIRED))
-                        .accessDeniedHandler(new AccessDeniedHandlerImpl())
+                                .authenticationEntryPoint(new CustomAuthenticationEntryPoint(GlobalErrorCode.ACCESS_TOKEN_EXPIRED))
+                                .accessDeniedHandler(((request, response, accessDeniedException) -> {
+                                    log.error("Access Denied: {}", accessDeniedException.getMessage(), accessDeniedException);
+                                    sendErrorResponse(response, GlobalErrorCode.ENDPOINT_NOT_FOUND);
+                                }))
                 );
 
         return http.build();

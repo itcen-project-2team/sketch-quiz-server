@@ -15,32 +15,26 @@ public final class SpaCsrfTokenRequestHandler implements CsrfTokenRequestHandler
     private final CsrfTokenRequestHandler xor = new XorCsrfTokenRequestAttributeHandler();
 
     @Override
-    public void handle(HttpServletRequest request, HttpServletResponse response, Supplier<CsrfToken> csrfToken) {
-        /*
-         * Always use XorCsrfTokenRequestAttributeHandler to provide BREACH protection of
-         * the CsrfToken when it is rendered in the response body.
-         */
+    public void handle(HttpServletRequest request,
+                       HttpServletResponse response,
+                       Supplier<CsrfToken> csrfToken) {
+        // 1) 항상 xor 핸들러를 써서 request attribute에 인코딩된 토큰을 넣는다
         this.xor.handle(request, response, csrfToken);
-        /*
-         * Render the token value to a cookie by causing the deferred token to be loaded.
-         */
+
+        // 2) csrfToken.get() 을 호출해 쿠키에도 토큰을 내려주게 트리거
         csrfToken.get();
     }
 
+
     @Override
     public String resolveCsrfTokenValue(HttpServletRequest request, CsrfToken csrfToken) {
+        // 요청 헤더에 토큰이 있는지 확인
         String headerValue = request.getHeader(csrfToken.getHeaderName());
-        /*
-         * If the request contains a request header, use CsrfTokenRequestAttributeHandler
-         * to resolve the CsrfToken. This applies when a single-page application includes
-         * the header value automatically, which was obtained via a cookie containing the
-         * raw CsrfToken.
-         *
-         * In all other cases (e.g. if the request contains a request parameter), use
-         * XorCsrfTokenRequestAttributeHandler to resolve the CsrfToken. This applies
-         * when a server-side rendered form includes the _csrf request parameter as a
-         * hidden input.
-         */
-        return (StringUtils.hasText(headerValue) ? this.plain : this.xor).resolveCsrfTokenValue(request, csrfToken);
-    }
+
+        return (StringUtils.hasText(headerValue)
+                // (A) 헤더가 있으면 plain 방식으로 그대로 꺼내고
+                ? this.plain
+                // (B) 헤더가 없으면 xor 방식으로 파라미터값을 디코딩해서 꺼낸다
+                : this.xor
+        ).resolveCsrfTokenValue(request, csrfToken);    }
 }

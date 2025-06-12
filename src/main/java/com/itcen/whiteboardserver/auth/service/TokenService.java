@@ -68,8 +68,6 @@ public class TokenService {
      * @param profileColor 배경 색상
      * @return [0] = access_token 쿠키, [1] = refresh_token 쿠키
      */
-//    public void issueTokens(String username, String nickname, String id, List<String> roles,
-//                            HttpServletResponse response) {
     public ResponseCookie[] issueTokens(
             String username,
             String nickname,
@@ -138,7 +136,6 @@ public class TokenService {
         } catch (JwtException ex) {
             log.error("Invalid JWT token: {}", ex.getMessage());
             throw new GlobalCommonException(GlobalErrorCode.INVALID_ACCESS_TOKEN);
-//            return null;
         }
     }
 
@@ -153,7 +150,6 @@ public class TokenService {
      * @param old  클라이언트가 보낸 refresh_token 문자열(JWT)
      * @return [0] = 새 access_token 쿠키, [1] = 새 refresh_token 쿠키
      */
-//    public void rotateRefresh(HttpServletRequest request, HttpServletResponse response) {
     public ResponseCookie[] rotateRefresh(String old) {
         if (old == null) {
             log.error("Missing refresh token");

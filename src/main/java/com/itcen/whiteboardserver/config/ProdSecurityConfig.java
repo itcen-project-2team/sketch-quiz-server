@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itcen.whiteboardserver.auth.service.CustomOAuth2UserService;
 import com.itcen.whiteboardserver.auth.service.CustomOidcUserService;
 import com.itcen.whiteboardserver.auth.service.UserDetailsServiceImpl;
+import com.itcen.whiteboardserver.config.mvc.SpaCsrfTokenRequestHandler;
 import com.itcen.whiteboardserver.global.exception.GlobalErrorCode;
 import com.itcen.whiteboardserver.global.exception.GlobalExceptionResponse;
 import com.itcen.whiteboardserver.security.filter.JwtAuthenticationFilter;
@@ -31,9 +32,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.access.AccessDeniedHandlerImpl;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 
 import java.io.IOException;
@@ -70,26 +71,18 @@ public class ProdSecurityConfig {
                         SecurityContextHolderFilter.class)
                 // Rate limiting filter 를 먼저 chaining 하는 것은 비인증 사용자만 하면 된다
                 .addFilterAfter(redisRateLimitingFilter, RequestResponseLoggingFilter.class)
-                // CSRF config: HttpOnly cookie, SameSite=Lax, header X-XSRF-TOKEN
 
-//                .csrf(csrf -> csrf
-//                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-//                        .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler())
-//
-//                        // 로그인·회원가입만 제외
-//                        .ignoringRequestMatchers(
-//                                "/api/auth/logout", "/api/auth/oauth2/refresh",
-//                        )
-//                )
-                .csrf(AbstractHttpConfigurer::disable)
+                // CSRF config: HttpOnly cookie, SameSite=Lax, header X-XSRF-TOKEN
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler())
+                )
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
-                // JWT auth filter -> 인증 필터보다 먼저 토큰 추출 및 검증을 하여 SecurityContext 설정
-                .addFilterAfter(jwtAuthenticationFilter, SecurityContextHolderFilter.class)
+                .addFilterAfter(jwtAuthenticationFilter, CsrfFilter.class)
 
                 // OAuth2 Login
                 .oauth2Login(oauth2 -> oauth2
-//                        .loginPage("/auth/login")
                                 .authorizationEndpoint(a -> a
                                         .baseUri("/oauth2/authorization")
                                         // 쿠키 저장소: OAuth2 인가 요청(state) 보관
@@ -122,14 +115,10 @@ public class ProdSecurityConfig {
 
                 // Authorize endpoints
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/static/**", "/index.html", "/static/**", "/login.html","/images/**", "/oauth2.html","/favicon.ico", "/css/**", "/js/**").permitAll()
-                        .requestMatchers("/").permitAll()
-                        .requestMatchers("/login/oauth2/**", "/oauth2/**", "/api/auth/oauth2/refresh", "api/auth/logout").permitAll()
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/login/oauth2/code/kakao", "/oauth2/authorization/kakao", "/api/auth/oauth2/refresh", "api/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.GET,"/api/member", "/api/member/nickname").authenticated()
                         .requestMatchers(HttpMethod.PATCH,"/api/member/nickname").authenticated()
                         .requestMatchers(HttpMethod.POST,"/api/room").authenticated()
-                        .requestMatchers(HttpMethod.POST,"/api/friends/friends").authenticated()
                         .requestMatchers("/ws/**").authenticated()
 
                         .anyRequest().denyAll()
@@ -138,7 +127,6 @@ public class ProdSecurityConfig {
                 /* 설명. 보호된 api 접근 시*/
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(new CustomAuthenticationEntryPoint(GlobalErrorCode.ACCESS_TOKEN_EXPIRED))
-//                        .accessDeniedHandler(new AccessDeniedHandlerImpl())
                         .accessDeniedHandler(((request, response, accessDeniedException) -> {
                             log.error("Access Denied: {}", accessDeniedException.getMessage(), accessDeniedException);
                             sendErrorResponse(response, GlobalErrorCode.ENDPOINT_NOT_FOUND);
