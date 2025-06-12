@@ -1,6 +1,8 @@
 package com.itcen.whiteboardserver.chatting.service;
 
 import com.itcen.whiteboardserver.chatting.dto.ChattingRequest;
+import com.itcen.whiteboardserver.common.broadcast.Broadcaster;
+import com.itcen.whiteboardserver.common.broadcast.dto.TurnBroadcastDto;
 import com.itcen.whiteboardserver.game.session.GameSession;
 import com.itcen.whiteboardserver.member.entity.Member;
 import com.itcen.whiteboardserver.member.repository.MemberRepository;
@@ -9,17 +11,15 @@ import com.itcen.whiteboardserver.turn.dto.response.TurnResponseType;
 import com.itcen.whiteboardserver.turn.dto.response.data.ChatData;
 import com.itcen.whiteboardserver.turn.service.TurnService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 public class ChattingServiceImpl implements ChattingService {
-
     private final GameSession gameSession;
     private final MemberRepository memberRepository;
-    private final SimpMessagingTemplate messagingTemplate;
     private final TurnService turnService;
+    private final Broadcaster broadcaster;
 
     @Override
     public void chat(ChattingRequest chattingRequest) {
@@ -67,6 +67,11 @@ public class ChattingServiceImpl implements ChattingService {
                 )
         );
 
-        messagingTemplate.convertAndSend("/topic/game/" + gameId + "/chat", response);
+        broadcaster.broadcast(
+                TurnBroadcastDto.<ChatData>builder()
+                        .destination("/topic/game/" + gameId + "/chat")
+                        .data(response)
+                        .build()
+        );
     }
 }

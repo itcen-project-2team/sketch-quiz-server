@@ -18,6 +18,7 @@ import com.itcen.whiteboardserver.game.session.GameSession;
 import com.itcen.whiteboardserver.game.session.state.GameState;
 import com.itcen.whiteboardserver.member.entity.Member;
 import com.itcen.whiteboardserver.member.repository.MemberRepository;
+import com.itcen.whiteboardserver.quiz.QuizService;
 import com.itcen.whiteboardserver.turn.service.TurnService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -147,12 +148,10 @@ public class GameService {
     private void createGameState(List<GameParticipantResponse> gameParticipants, Game game) {
         List<Long> participants = new ArrayList<>();
 
-        //TODO: 게임 진행 순서 정해야 하는가?
         for (GameParticipantResponse participant : gameParticipants) {
             participants.add(participant.memberId());
         }
 
-        //TODO: 코드 중복 해결
-        gameSession.createSession(game.getId(), GameState.createGameState(participants, quizService.getQuizWordsForGame(participants.size() * 3)));
+        gameSession.createSession(game.getId(), GameState.createGameState(participants, quizService.getQuizWords(participants.size())));
     }
 }

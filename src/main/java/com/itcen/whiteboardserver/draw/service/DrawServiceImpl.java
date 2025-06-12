@@ -1,5 +1,7 @@
 package com.itcen.whiteboardserver.draw.service;
 
+import com.itcen.whiteboardserver.common.broadcast.Broadcaster;
+import com.itcen.whiteboardserver.common.broadcast.dto.TurnBroadcastDto;
 import com.itcen.whiteboardserver.draw.dto.DrawDto;
 import com.itcen.whiteboardserver.turn.dto.response.TurnResponse;
 import com.itcen.whiteboardserver.turn.dto.response.TurnResponseType;
@@ -7,7 +9,6 @@ import com.itcen.whiteboardserver.turn.entitiy.Turn;
 import com.itcen.whiteboardserver.turn.repository.TurnRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 @Transactional
@@ -15,7 +16,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class DrawServiceImpl implements DrawService {
     private final TurnRepository turnRepository;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final Broadcaster broadcaster;
 
     @Override
     public void draw(DrawDto drawDto, Long gameId, String email) {
@@ -40,6 +41,11 @@ public class DrawServiceImpl implements DrawService {
                 drawDto
         );
 
-        messagingTemplate.convertAndSend("/topic/game/" + gameId + "/draw", response);
+        broadcaster.broadcast(
+                TurnBroadcastDto.<DrawDto>builder()
+                        .destination("/topic/game/" + gameId + "/draw")
+                        .data(response)
+                        .build()
+        );
     }
 }

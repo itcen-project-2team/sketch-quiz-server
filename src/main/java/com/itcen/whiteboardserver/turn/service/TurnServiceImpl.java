@@ -1,5 +1,8 @@
 package com.itcen.whiteboardserver.turn.service;
 
+import com.itcen.whiteboardserver.common.broadcast.Broadcaster;
+import com.itcen.whiteboardserver.common.broadcast.dto.TurnBroadcastDto;
+import com.itcen.whiteboardserver.common.broadcast.dto.TurnUnicastDto;
 import com.itcen.whiteboardserver.game.entity.Game;
 import com.itcen.whiteboardserver.game.entity.GameParticipation;
 import com.itcen.whiteboardserver.game.entity.Room;
@@ -17,12 +20,10 @@ import com.itcen.whiteboardserver.turn.entitiy.Turn;
 import com.itcen.whiteboardserver.turn.mapper.TurnMapper;
 import com.itcen.whiteboardserver.turn.repository.CorrectRepository;
 import com.itcen.whiteboardserver.turn.repository.TurnRepository;
-import jakarta.persistence.OptimisticLockException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationContext;
 import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -39,7 +40,7 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class TurnServiceImpl implements TurnService {
 
-    final SimpMessagingTemplate messagingTemplate;
+    final Broadcaster broadcaster;
     final GameSession gameSession;
     final MemberRepository memberRepository;
     final GameRepository gameRepository;
@@ -50,7 +51,6 @@ public class TurnServiceImpl implements TurnService {
     final PlatformTransactionManager transactionManager;
     final ApplicationContext applicationContext;
     final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(5);
-    final TransactionTemplate transactionTemplate;
     final RoomRepository roomRepository;
 
     @Override
@@ -180,7 +180,12 @@ public class TurnServiceImpl implements TurnService {
                 correctData
         );
 
-        messagingTemplate.convertAndSend("/topic/game/" + correctData.gameId(), response);
+        broadcaster.broadcast(
+                TurnBroadcastDto.<CorrectData>builder()
+                        .destination("/topic/game" + correctData.gameId())
+                        .data(response)
+                        .build()
+        );
     }
 
     private void doTurnOver(Long turnId) {
@@ -266,7 +271,12 @@ public class TurnServiceImpl implements TurnService {
                 )
         );
 
-        messagingTemplate.convertAndSend("/topic/game/" + game.getId(), response);
+        broadcaster.broadcast(
+                TurnBroadcastDto.<TurnQuitData>builder()
+                        .destination("/topic/game/" + game.getId())
+                        .data(response)
+                        .build()
+        );
     }
 
     private void broadcastTurnInfo(Long turnId) {
@@ -274,7 +284,12 @@ public class TurnServiceImpl implements TurnService {
         Game game = turn.getGame();
         TurnResponse<TurnData> response = TurnMapper.turnToTurnDataResponse(turn);
 
-        messagingTemplate.convertAndSend("/topic/game/" + game.getId(), response);
+        broadcaster.broadcast(
+                TurnBroadcastDto.<TurnData>builder()
+                        .destination("/topic/game/" + game.getId())
+                        .data(response)
+                        .build()
+        );
     }
 
     private void sendDrawInfoToDrawer(Long turnId) {
@@ -289,10 +304,12 @@ public class TurnServiceImpl implements TurnService {
                 )
         );
 
-        messagingTemplate.convertAndSendToUser(
-                turn.getMember().getEmail(),
-                "/topic/game/" + game.getId(),
-                response
+        broadcaster.unicast(
+                TurnUnicastDto.<DrawerData>builder()
+                        .email(turn.getMember().getEmail())
+                        .destination("/topic/game/" + game.getId())
+                        .data(response)
+                        .build()
         );
     }
 
