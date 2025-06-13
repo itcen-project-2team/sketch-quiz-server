@@ -1,8 +1,6 @@
-package com.itcen.whiteboardserver.quiz.service;
+package com.itcen.whiteboardserver.quiz;
 
 
-import com.itcen.whiteboardserver.quiz.QuizCategory;
-import com.itcen.whiteboardserver.quiz.QuizService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;

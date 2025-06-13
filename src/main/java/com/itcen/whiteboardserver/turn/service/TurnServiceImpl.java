@@ -29,7 +29,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -39,19 +38,19 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 @Service
 public class TurnServiceImpl implements TurnService {
-
-    final Broadcaster broadcaster;
-    final GameSession gameSession;
+    final ScoreService scoreService;
     final MemberRepository memberRepository;
     final GameRepository gameRepository;
     final TurnRepository turnRepository;
     final CorrectRepository correctRepository;
+    final RoomRepository roomRepository;
     final GameParticipationRepository gameParticipationRepository;
-    final int TURN_SECONDS = 90;
+    final Broadcaster broadcaster;
+    final GameSession gameSession;
     final PlatformTransactionManager transactionManager;
     final ApplicationContext applicationContext;
+    final int TURN_SECONDS = 90;
     final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(5);
-    final RoomRepository roomRepository;
 
     @Override
     public void startTurn(Long gameId) {
@@ -157,7 +156,7 @@ public class TurnServiceImpl implements TurnService {
     }
 
     private void quitGame(Game game) {
-        broadcastTurnScore(game, TurnResponseType.GAME_FINISH);
+        scoreService.finishGameWithScore(game);
 
         gameSession.removeSession(game.getId());
 
@@ -203,7 +202,7 @@ public class TurnServiceImpl implements TurnService {
                 throw new RuntimeException("현재 게임의 턴과 해당 턴이 동일하지 않습니다.");
             }
 
-            finalizeTurnScore(turn);
+            scoreService.finalizeTurnScore(turn);
 
             game.thisTurnDown();
             gameRepository.save(game);
@@ -217,65 +216,6 @@ public class TurnServiceImpl implements TurnService {
         } catch (OptimisticLockingFailureException e) {
             throw new RuntimeException("낙관적 lock 적용");
         }
-    }
-
-    private void finalizeTurnScore(Turn turn) {
-        Game game = turn.getGame();
-
-        //정답자 점수
-        List<Correct> corrects = correctRepository.findAllByTurnOrderByCreatedAtDesc(turn);
-        int score = 10;
-        for (Correct correct : corrects) {
-            GameParticipation gameParticipation = gameParticipationRepository.findByGameAndMember(game, correct.getMember())
-                    .orElseThrow(
-                            () -> new RuntimeException("게임, 회원에 해당하는 게임 참가이력이 없습니다.")
-                    );
-
-            gameParticipation.increaseScore(score);
-            score += 10;
-        }
-
-        //출제자 점수
-        int participationCnt = gameParticipationRepository.countByGame(game);
-        Member drawer = turn.getMember();
-
-        if (participationCnt - 1 == corrects.size()) {
-            int drawerScore = participationCnt / 2 * 10;
-
-            GameParticipation gameParticipation = gameParticipationRepository.findByGameAndMember(game, drawer).orElseThrow(
-                    () -> new RuntimeException("현재 게임, 출제자에 해당하는 게임 참여가 없습니다.")
-            );
-
-            gameParticipation.increaseScore(drawerScore);
-        }
-
-        broadcastTurnScore(game, TurnResponseType.FINISH);
-    }
-
-    private void broadcastTurnScore(Game game, TurnResponseType type) {
-        List<GameParticipation> gameParticipations = gameParticipationRepository.findAllByGame(game);
-
-        List<MemberScore> memberScores = new ArrayList<>();
-        for (GameParticipation gameParticipation : gameParticipations) {
-            memberScores.add(
-                    new MemberScore(gameParticipation.getMember().getId(), gameParticipation.getScore())
-            );
-        }
-
-        TurnResponse<TurnQuitData> response = new TurnResponse<>(
-                type,
-                new TurnQuitData(
-                        game.getId(),
-                        memberScores
-                )
-        );
-
-        broadcaster.broadcast(
-                TurnBroadcastDto.<TurnQuitData>builder()
-                        .destination("/topic/game/" + game.getId())
-                        .data(response)
-                        .build()
-        );
     }
 
     private void broadcastTurnInfo(Long turnId) {

@@ -3,6 +3,7 @@ package com.itcen.whiteboardserver.game.entity;
 import com.itcen.whiteboardserver.member.entity.Member;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -19,6 +20,7 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class GameParticipation {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
